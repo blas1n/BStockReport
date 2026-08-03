@@ -1,0 +1,15 @@
+# 자격 — 절대 커밋 금지
+.env
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 산출물
+logs/
