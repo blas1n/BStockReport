@@ -8,7 +8,7 @@ def m(**kwargs) -> SourceMetrics:
     return SourceMetrics(name="Test", ok=True, **kwargs)
 
 
-# ── anomaly_flags ─────────────────────────────────────────────────────────────
+# ── anomaly_flags ──────────────────────────────────────────────────────────────
 
 
 class TestAnomalyFlags:
@@ -58,7 +58,7 @@ class TestAnomalyFlags:
         assert len(flags) == 4
 
 
-# ── rule_commentary ───────────────────────────────────────────────────────────
+# ── rule_commentary ────────────────────────────────────────────────────────────
 
 
 class TestRuleCommentary:
@@ -67,7 +67,7 @@ class TestRuleCommentary:
 
     def test_ret_pct_only(self):
         result = rule_commentary(m(ret_pct=5.3))
-        assert "[총평]" in result
+        assert "• " in result
         assert "+5.30%" in result
         assert "Sharpe" not in result
 
@@ -81,7 +81,7 @@ class TestRuleCommentary:
 
     def test_baseline_only(self):
         result = rule_commentary(m(baseline="기준 설명"))
-        assert "[백테스트 기준선]" in result
+        assert "백테스트 기준선은" in result
         assert "기준 설명" in result
         assert "거래당 수익" not in result
         assert "승률 실측" not in result
@@ -112,12 +112,12 @@ class TestRuleCommentary:
 
     def test_risk_mdd(self):
         result = rule_commentary(m(mdd_pct=-5.2))
-        assert "[리스크]" in result
+        assert "위험 지표는" in result
         assert "최대낙폭 -5.2%" in result
 
     def test_risk_vol(self):
         result = rule_commentary(m(vol_pct=12.3))
-        assert "[리스크]" in result
+        assert "위험 지표는" in result
         assert "변동성 12.3%" in result
 
     def test_risk_mdd_and_vol_joined(self):
@@ -128,20 +128,26 @@ class TestRuleCommentary:
 
     def test_margin_with_cash(self):
         result = rule_commentary(m(is_margin=True, cash=-1000.0))
-        assert "[주의]" in result
-        assert "마진" in result
+        assert "마진 계좌" in result
         assert "-1,000" in result
 
     def test_margin_without_cash(self):
         result = rule_commentary(m(is_margin=True))
-        assert "[주의]" in result
-        assert "마진" in result
+        assert "마진 계좌" in result
         assert "현금" not in result
 
     def test_small_sample(self):
         result = rule_commentary(m(small_sample=True, days=30))
-        assert "[경고]" in result
-        assert "30일" in result
+        assert "소표본이에요" in result
+        assert "30거래일" in result
+
+    def test_small_sample_adds_sharpe_warning_to_risk_line(self):
+        result = rule_commentary(m(mdd_pct=-3.0, small_sample=True, days=20))
+        assert "Sharpe는 과대평가되기 쉬워요" in result
+
+    def test_small_sample_no_sharpe_warning_without_risk(self):
+        result = rule_commentary(m(small_sample=True, days=20))
+        assert "Sharpe는 과대평가되기 쉬워요" not in result
 
     def test_combined_all_sections(self):
         result = rule_commentary(
@@ -157,14 +163,20 @@ class TestRuleCommentary:
                 days=45,
             )
         )
-        assert "[총평]" in result
-        assert "[백테스트 기준선]" in result
-        assert "[리스크]" in result
-        assert "[주의]" in result
-        assert "[경고]" in result
+        assert "수익률 +2.00%" in result
+        assert "백테스트 기준선은" in result
+        assert "위험 지표는" in result
+        assert "마진 계좌" in result
+        assert "소표본이에요" in result
 
 
-# ── Source ABC smoke test ─────────────────────────────────────────────────────
+# ── Source ABC smoke test ──────────────────────────────────────────────────────
+
+
+def test_report_build_smoke():
+    from bstockreport.report import build
+
+    assert isinstance(build([m()], verbatim=False), str)
 
 
 def test_source_abc_cannot_be_instantiated():
