@@ -98,7 +98,6 @@ def test_happy_path():
     assert m.vol_pct is not None and m.vol_pct >= 0
     assert m.sharpe is not None
     assert m.mdd_pct == pytest.approx(0.0)
-    assert m.small_sample is False
 
     assert m.fills == 2
     assert m.total_orders == 2
@@ -106,6 +105,7 @@ def test_happy_path():
     assert m.rt_count == 1
     assert m.rt_avg_pct == pytest.approx(20.0)
     assert m.rt_win_pct == pytest.approx(100.0)
+    assert m.small_sample is True  # rt_count=1 < 30
 
     assert m.pos_count == 1
     assert m.equity == pytest.approx(50000.0)
@@ -362,3 +362,56 @@ def test_trading_client_created_with_paper_true(monkeypatch):
         AlpacaPaperSource(name="t", key_env="MY_KEY", secret_env="MY_SEC").collect()
 
     MC.assert_called_once_with("abc", "xyz", paper=True)
+
+
+# ─── small_sample: 거래 수 기준 보강 ────────────────────────────────────────────
+
+
+def test_small_sample_true_when_few_roundtrips():
+    """days >= 60 이지만 왕복 2건 → small_sample=True (이번에 고치는 실제 상황)."""
+    eq = [100.0 + i for i in range(60)]
+    buys = [_order("AAPL", OrderSide.BUY, 1, 100.0, t=i) for i in range(2)]
+    sells = [_order("AAPL", OrderSide.SELL, 1, 110.0, t=i + 2) for i in range(2)]
+
+    with patch("bstockreport.sources.alpaca.TradingClient") as MC:
+        inst = MC.return_value
+        _setup(
+            inst, equity=eq, orders=buys + sells, positions=[], acct_equity=10000, acct_cash=5000
+        )
+        m = _source().collect()
+
+    assert m.days == 60
+    assert m.rt_count == 2
+    assert m.small_sample is True
+
+
+def test_small_sample_false_when_many_roundtrips():
+    """days >= 60 이고 왕복 30건 이상 → small_sample=False."""
+    eq = [100.0 + i for i in range(60)]
+    buys = [_order("AAPL", OrderSide.BUY, 1, 100.0, t=i) for i in range(30)]
+    sells = [_order("AAPL", OrderSide.SELL, 1, 110.0, t=i + 30) for i in range(30)]
+
+    with patch("bstockreport.sources.alpaca.TradingClient") as MC:
+        inst = MC.return_value
+        _setup(
+            inst, equity=eq, orders=buys + sells, positions=[], acct_equity=10000, acct_cash=5000
+        )
+        m = _source().collect()
+
+    assert m.days == 60
+    assert m.rt_count == 30
+    assert m.small_sample is False
+
+
+def test_small_sample_false_when_no_roundtrips_and_days_ge_60():
+    """왕복 0건이고 days >= 60 → small_sample=False."""
+    eq = [100.0 + i for i in range(60)]
+
+    with patch("bstockreport.sources.alpaca.TradingClient") as MC:
+        inst = MC.return_value
+        _setup(inst, equity=eq, orders=[], positions=[], acct_equity=10000, acct_cash=5000)
+        m = _source().collect()
+
+    assert m.days == 60
+    assert m.rt_count is None
+    assert m.small_sample is False

@@ -75,8 +75,6 @@ class AlpacaPaperSource(Source):
             sharpe = None
             mdd_pct = None
 
-        small_sample = days < 60
-
         # 2. 체결·왕복거래
         orders = client.get_orders(GetOrdersRequest(status=QueryOrderStatus.ALL, limit=500))
         total_orders = len(orders)
@@ -120,6 +118,8 @@ class AlpacaPaperSource(Source):
             rt_avg_pct = None
             rt_med_pct = None
             rt_win_pct = None
+
+        small_sample = days < 60 or (rt_count is not None and rt_count < 30)
 
         # 3. 포지션·현금
         account = client.get_account()
