@@ -1,0 +1,26 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 테스트 도구는 [project.optional-dependencies] dev 에 있으므로
+      # --extra dev 없이는 pytest/ruff 가 설치되지 않는다.
+      - name: Install
+        run: uv sync --extra dev
+
+      - name: Lint
+        run: uv run ruff check src/ tests/
+
+      - name: Format
+        run: uv run ruff format --check src/ tests/
+
+      - name: Test
+        run: uv run pytest --cov=src/bstockreport --cov-fail-under=80
