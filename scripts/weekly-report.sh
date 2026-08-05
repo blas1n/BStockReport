@@ -13,6 +13,11 @@ mkdir -p logs
 
 [ -f .env ] || { echo "ERROR: .env not found in $PROJECT_DIR" >&2; exit 1; }
 
+# .env 를 프로세스 환경으로 올린다. pydantic-settings 는 .env 파일을 직접 읽지만
+# 소스 어댑터는 os.environ[key_env] 로 Alpaca 키를 읽으므로, export 하지 않으면
+# 키가 어댑터에 닿지 않아 두 소스가 모두 KeyError 로 실패한다(실제로 겪었다).
+set -a; . ./.env; set +a
+
 LOG="logs/weekly-$(date +%Y%m%d).log"
 
 # 로컬 LLM 이 콜드 스타트면 첫 호출이 느리다 — 미리 깨워 둔다(실패해도 무시).
@@ -24,7 +29,6 @@ if uv run bstockreport run --push >>"$LOG" 2>&1; then
 else
   echo "$(date '+%F %T') 실패(exit $?)" >>"$LOG"
   # 리포트가 안 가는 것보다 실패를 아는 게 낫다 — 짧은 알림을 직접 보낸다.
-  set -a; . ./.env; set +a
   if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
     curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
       --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
