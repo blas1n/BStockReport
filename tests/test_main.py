@@ -1,5 +1,7 @@
 import sys
 
+import pytest
+
 import bstockreport.main as main_mod
 from bstockreport.metrics import SourceMetrics
 
@@ -126,7 +128,9 @@ def test_one_source_fails_other_in_output(monkeypatch, capsys):
     assert "수익률" in out
 
 
-def test_both_sources_fail_still_no_crash(monkeypatch, capsys):
+def test_both_sources_fail_exits_1(monkeypatch, capsys):
+    """전 소스 실패 시 출력은 하되 종료 코드 1."""
+
     def always_fail(self):
         raise RuntimeError("always fails")
 
@@ -134,8 +138,10 @@ def test_both_sources_fail_still_no_crash(monkeypatch, capsys):
     monkeypatch.setattr(main_mod, "load_bloasis_baseline", lambda path: None)
     monkeypatch.setattr(sys, "argv", ["bstockreport", "run", "--emit"])
 
-    main_mod.main()
+    with pytest.raises(SystemExit) as exc_info:
+        main_mod.main()
 
+    assert exc_info.value.code == 1
     out = capsys.readouterr().out
     assert "수집 실패" in out
 
@@ -170,3 +176,58 @@ def test_llm_none_commentary_not_empty(monkeypatch):
 
     full_text = " ".join(telegram_calls)
     assert len(full_text.strip()) > 0
+
+
+# ── 종료 코드 ──────────────────────────────────────────────────────────────────
+
+
+def test_all_sources_fail_exits_1_and_telegram_called(monkeypatch):
+    """모든 소스 실패 → SystemExit(1), 전송은 여전히 호출됨."""
+    telegram_calls: list = []
+
+    def always_fail(self):
+        raise RuntimeError("always fails")
+
+    monkeypatch.setattr(main_mod.AlpacaPaperSource, "collect", always_fail)
+    monkeypatch.setattr(main_mod, "send_telegram", _fake_send(telegram_calls))
+    monkeypatch.setattr(main_mod, "load_bloasis_baseline", lambda path: None)
+    monkeypatch.setattr(main_mod, "llm_commentary", lambda *a, **kw: None)
+    monkeypatch.setattr(sys, "argv", ["bstockreport", "run", "--push"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_mod.main()
+
+    assert exc_info.value.code == 1
+    assert len(telegram_calls) >= 1
+
+
+def test_partial_failure_exits_0(monkeypatch):
+    """일부만 실패 → 정상 종료(코드 0)."""
+    call_count = [0]
+
+    def flaky_collect(self):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            raise RuntimeError("api error")
+        return SourceMetrics(name=self._name, ok=True, ret_pct=2.0)
+
+    telegram_calls: list = []
+    monkeypatch.setattr(main_mod.AlpacaPaperSource, "collect", flaky_collect)
+    monkeypatch.setattr(main_mod, "send_telegram", _fake_send(telegram_calls))
+    monkeypatch.setattr(main_mod, "load_bloasis_baseline", lambda path: None)
+    monkeypatch.setattr(main_mod, "llm_commentary", lambda *a, **kw: "LLM 해설이에요.")
+    monkeypatch.setattr(sys, "argv", ["bstockreport", "run", "--push"])
+
+    main_mod.main()  # SystemExit 발생 없이 정상 종료
+
+
+def test_all_sources_success_exits_0(monkeypatch):
+    """전부 성공 → 정상 종료(코드 0)."""
+    telegram_calls: list = []
+    monkeypatch.setattr(main_mod.AlpacaPaperSource, "collect", _good_collect)
+    monkeypatch.setattr(main_mod, "send_telegram", _fake_send(telegram_calls))
+    monkeypatch.setattr(main_mod, "load_bloasis_baseline", lambda path: None)
+    monkeypatch.setattr(main_mod, "llm_commentary", lambda *a, **kw: "LLM 해설이에요.")
+    monkeypatch.setattr(sys, "argv", ["bstockreport", "run", "--push"])
+
+    main_mod.main()  # SystemExit 발생 없이 정상 종료

@@ -14,8 +14,8 @@ from bstockreport.sources.alpaca import AlpacaPaperSource
 def _source(**kwargs):
     return AlpacaPaperSource(
         name="paper",
-        key_env="APCA_KEY",
-        secret_env="APCA_SECRET",
+        api_key="k",
+        secret_key="s",
         **kwargs,
     )
 
@@ -345,10 +345,7 @@ def test_mdd_negative_when_drawdown_exists():
 # ─── TradingClient 파라미터 검증 ─────────────────────────────────────────────
 
 
-def test_trading_client_created_with_paper_true(monkeypatch):
-    monkeypatch.setenv("MY_KEY", "abc")
-    monkeypatch.setenv("MY_SEC", "xyz")
-
+def test_trading_client_created_with_paper_true():
     with patch("bstockreport.sources.alpaca.TradingClient") as MC:
         inst = MC.return_value
         _setup(
@@ -359,9 +356,16 @@ def test_trading_client_created_with_paper_true(monkeypatch):
             acct_equity=10000,
             acct_cash=5000,
         )
-        AlpacaPaperSource(name="t", key_env="MY_KEY", secret_env="MY_SEC").collect()
+        AlpacaPaperSource(name="t", api_key="abc", secret_key="xyz").collect()
 
     MC.assert_called_once_with("abc", "xyz", paper=True)
+
+
+def test_collect_raises_on_empty_api_key():
+    """api_key가 빈 문자열이면 collect()에서 ValueError를 던진다."""
+    src = AlpacaPaperSource(name="BStalk3r", api_key="", secret_key="s")
+    with pytest.raises(ValueError, match="BStalk3r: API 키가 비어 있어요"):
+        src.collect()
 
 
 # ─── small_sample: 거래 수 기준 보강 ────────────────────────────────────────────

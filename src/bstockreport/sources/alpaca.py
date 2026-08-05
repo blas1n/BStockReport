@@ -1,5 +1,4 @@
 import math
-import os
 import statistics
 from collections import defaultdict, deque
 
@@ -15,15 +14,15 @@ class AlpacaPaperSource(Source):
     def __init__(
         self,
         name: str,
-        key_env: str,
-        secret_env: str,
+        api_key: str,
+        secret_key: str,
         baseline: str | None = None,
         baseline_trade_pct: float | None = None,
         baseline_win_pct: float | None = None,
     ) -> None:
         self._name = name
-        self._key_env = key_env
-        self._secret_env = secret_env
+        self._api_key = api_key
+        self._secret_key = secret_key
         self._baseline = baseline
         self._baseline_trade_pct = baseline_trade_pct
         self._baseline_win_pct = baseline_win_pct
@@ -33,9 +32,9 @@ class AlpacaPaperSource(Source):
         return self._name
 
     def collect(self) -> SourceMetrics:
-        key = os.environ[self._key_env]
-        secret = os.environ[self._secret_env]
-        client = TradingClient(key, secret, paper=True)
+        if not self._api_key:
+            raise ValueError(f"{self._name}: API 키가 비어 있어요")
+        client = TradingClient(self._api_key, self._secret_key, paper=True)
 
         # 1. 자산곡선
         hist = client.get_portfolio_history(GetPortfolioHistoryRequest(period="3M", timeframe="1D"))

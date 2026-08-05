@@ -1,4 +1,5 @@
 import argparse
+import sys
 
 from bstockreport.baseline import load_bloasis_baseline
 from bstockreport.commentary import rule_commentary
@@ -29,16 +30,16 @@ def main() -> None:
     sources = [
         AlpacaPaperSource(
             "BStalk3r",
-            "ALPACA_API_KEY",
-            "ALPACA_SECRET_KEY",
+            api_key=settings.alpaca_api_key,
+            secret_key=settings.alpaca_secret_key,
             baseline="거래당 +0.32% · 승률 63% · Sharpe ~0.72",
             baseline_trade_pct=0.32,
             baseline_win_pct=63.0,
         ),
         AlpacaPaperSource(
             "Bloasis",
-            "ALPACA_PAPER_API_KEY",
-            "ALPACA_PAPER_API_SECRET",
+            api_key=settings.alpaca_paper_api_key,
+            secret_key=settings.alpaca_paper_api_secret,
             baseline=bloasis_bl.text if bloasis_bl else None,
             baseline_trade_pct=bloasis_bl.trade_pct if bloasis_bl else None,
             baseline_win_pct=bloasis_bl.win_pct if bloasis_bl else None,
@@ -52,10 +53,14 @@ def main() -> None:
         except Exception as exc:
             metrics.append(SourceMetrics(name=src.name, ok=False, error=str(exc)))
 
+    all_failed = all(not m.ok for m in metrics)
+
     report = build(metrics, verbatim=verbatim)
 
     if not push:
         print(report)
+        if all_failed:
+            sys.exit(1)
         return
 
     commentary = llm_commentary(
@@ -73,3 +78,6 @@ def main() -> None:
         full = report + "\n\n" + commentary
 
     send_telegram(full, bot_token=settings.telegram_bot_token, chat_id=settings.telegram_chat_id)
+
+    if all_failed:
+        sys.exit(1)
