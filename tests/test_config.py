@@ -1,8 +1,21 @@
 from bstockreport.config import Settings
 
 
-def test_defaults():
-    s = Settings()
+def test_defaults(monkeypatch):
+    for var in [
+        "ALPACA_API_KEY",
+        "ALPACA_SECRET_KEY",
+        "ALPACA_PAPER_API_KEY",
+        "ALPACA_PAPER_API_SECRET",
+        "BLOASIS_DB_PATH",
+        "LLM_MODEL",
+        "OLLAMA_HOST",
+        "LLM_TIMEOUT_S",
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_CHAT_ID",
+    ]:
+        monkeypatch.delenv(var, raising=False)
+    s = Settings(_env_file=None)
     assert s.alpaca_api_key == ""
     assert s.alpaca_secret_key == ""
     assert s.alpaca_paper_api_key == ""

@@ -30,6 +30,9 @@ packages = ["src/bstockreport"]
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "surface: 실제 HTTP 통신을 포함한 표면 검증 테스트 (uv run pytest -m surface tests/surface/)",
+]
 
 [tool.coverage.run]
 source = ["src/bstockreport"]

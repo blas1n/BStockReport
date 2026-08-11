@@ -19,13 +19,12 @@ bloasis 프로젝트는 백테스트 결과를 SQLite `backtest_runs` 테이블�
 ```python
 @dataclass(frozen=True)
 class Baseline:
-    text: str                      # 사람이 읽는 한 줄 (SourceMetrics.baseline 에 넣는다)
-    trade_pct: float | None        # 거래당 평균 수익률 %
-    win_pct: float | None          # 승률 %
+    text: str  # 사람이 읽는 한 줄 (SourceMetrics.baseline 에 넣는다)
+    trade_pct: float | None  # 거래당 평균 수익률 %
+    win_pct: float | None  # 승률 %
 
 
-def load_bloasis_baseline(db_path: str | None = None) -> Baseline | None:
-    ...
+def load_bloasis_baseline(db_path: str | None = None) -> Baseline | None: ...
 ```
 
 동작:

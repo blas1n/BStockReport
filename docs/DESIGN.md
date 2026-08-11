@@ -61,8 +61,8 @@ BStockReport/
 ```python
 @dataclass
 class SourceMetrics:
-    name: str                 # "BStalk3r" / "Bloasis"
-    ok: bool                  # 수집 성공 여부(False면 리포트에 에러줄만)
+    name: str  # "BStalk3r" / "Bloasis"
+    ok: bool  # 수집 성공 여부(False면 리포트에 에러줄만)
     error: str | None = None
 
     # 자산곡선
@@ -73,7 +73,7 @@ class SourceMetrics:
     vol_pct: float | None = None
     sharpe: float | None = None
     mdd_pct: float | None = None
-    small_sample: bool = False        # days < 60
+    small_sample: bool = False  # days < 60
 
     # 체결·왕복
     fills: int | None = None
@@ -93,7 +93,7 @@ class SourceMetrics:
     is_margin: bool = False
 
     # 소스별 기준선(백테스트 등) — 비교 앵커. None이면 비교줄 생략
-    baseline: str | None = None       # 예: "거래당 +0.32% · 승률 63% · Sharpe ~0.72"
+    baseline: str | None = None  # 예: "거래당 +0.32% · 승률 63% · Sharpe ~0.72"
     baseline_trade_pct: float | None = None
     baseline_win_pct: float | None = None
 ```
@@ -109,6 +109,7 @@ class SourceMetrics:
 ```python
 class AlpacaPaperSource(Source):
     def __init__(self, name, key_env, secret_env, baseline=None): ...
+
     # get_portfolio_history(period="3M", timeframe="1D") → vol/Sharpe/maxDD
     # get_orders(ALL, limit=500) filled → FIFO 매칭 → 왕복 P&L·승률
     # get_account()+get_all_positions() → 마진 여부(cash<0)
