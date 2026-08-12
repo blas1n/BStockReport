@@ -113,6 +113,12 @@ class TestMultipleSources:
         result = build(sources, verbatim=False)
         assert result.count("─" * 10) >= 2
 
+    def test_separator_width_is_56(self):
+        a = SourceMetrics(name="A", ok=True, ret_pct=1.0)
+        b = SourceMetrics(name="B", ok=True, ret_pct=2.0)
+        result = build([a, b], verbatim=False)
+        assert "─" * 56 in result
+
 
 # ── 자산 섹션 ────────────────────────────────────────────────────────────────
 
