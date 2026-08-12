@@ -1,7 +1,7 @@
 from bstockreport.commentary import anomaly_flags
 from bstockreport.metrics import SourceMetrics
 
-_SEP = "─" * 32
+_SEP = "─" * 40
 
 
 def build(metrics: list[SourceMetrics], *, verbatim: bool) -> str:
