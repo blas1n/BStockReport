@@ -1,3 +1,5 @@
+from datetime import date
+
 from bstockreport.metrics import SourceMetrics
 from bstockreport.report import build
 
@@ -244,3 +246,39 @@ class TestEmptyList:
     def test_empty_list_verbatim(self):
         result = build([], verbatim=True)
         assert result == "<<REPORT_VERBATIM>>\n\n<<END>>"
+
+
+# ── 집계 기간 푸터 ────────────────────────────────────────────────────────────
+
+
+class TestPeriodFooter:
+    def test_period_footer_shown_when_dates_present(self):
+        m = _ok(period_start=date(2026, 5, 1), period_end=date(2026, 8, 1))
+        result = build([m], verbatim=False)
+        assert "집계 기간: 2026-05-01 ~ 2026-08-01" in result
+
+    def test_period_footer_at_bottom(self):
+        m = _ok(period_start=date(2026, 5, 1), period_end=date(2026, 8, 1), ret_pct=1.0)
+        result = build([m], verbatim=False)
+        assert result.endswith("집계 기간: 2026-05-01 ~ 2026-08-01")
+
+    def test_period_footer_omitted_when_no_dates(self):
+        result = build([_ok()], verbatim=False)
+        assert "집계 기간:" not in result
+
+    def test_period_footer_inside_verbatim_markers(self):
+        m = _ok(period_start=date(2026, 5, 1), period_end=date(2026, 8, 1))
+        result = build([m], verbatim=True)
+        assert result.startswith("<<REPORT_VERBATIM>>")
+        assert result.endswith("<<END>>")
+        assert "집계 기간: 2026-05-01 ~ 2026-08-01" in result
+
+    def test_period_footer_uses_widest_range_across_sources(self):
+        a = SourceMetrics(
+            name="A", ok=True, period_start=date(2026, 5, 1), period_end=date(2026, 8, 1)
+        )
+        b = SourceMetrics(
+            name="B", ok=True, period_start=date(2026, 4, 15), period_end=date(2026, 8, 5)
+        )
+        result = build([a, b], verbatim=False)
+        assert "집계 기간: 2026-04-15 ~ 2026-08-05" in result

@@ -1,6 +1,7 @@
 import math
 import statistics
 from collections import defaultdict, deque
+from datetime import UTC, datetime
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, OrderStatus, QueryOrderStatus
@@ -38,7 +39,9 @@ class AlpacaPaperSource(Source):
 
         # 1. 자산곡선
         hist = client.get_portfolio_history(GetPortfolioHistoryRequest(period="3M", timeframe="1D"))
-        equity_pts = [e for e in (hist.equity or []) if e]
+        raw_timestamps = hist.timestamp if isinstance(hist.timestamp, list) else []
+        equity_raw = hist.equity or []
+        equity_pts = [e for e in equity_raw if e]
 
         if len(equity_pts) >= 2:
             days = len(equity_pts)
@@ -120,6 +123,15 @@ class AlpacaPaperSource(Source):
 
         small_sample = days < 60 or (rt_count is not None and rt_count < 30)
 
+        # 집계 기간
+        valid_ts = [t for t, e in zip(raw_timestamps, equity_raw, strict=False) if e]
+        if valid_ts:
+            period_start = datetime.fromtimestamp(valid_ts[0], tz=UTC).date()
+            period_end = datetime.fromtimestamp(valid_ts[-1], tz=UTC).date()
+        else:
+            period_start = None
+            period_end = None
+
         # 3. 포지션·현금
         account = client.get_account()
         positions = client.get_all_positions()
@@ -158,4 +170,6 @@ class AlpacaPaperSource(Source):
             baseline=self._baseline,
             baseline_trade_pct=self._baseline_trade_pct,
             baseline_win_pct=self._baseline_win_pct,
+            period_start=period_start,
+            period_end=period_end,
         )

@@ -419,3 +419,47 @@ def test_small_sample_false_when_no_roundtrips_and_days_ge_60():
     assert m.days == 60
     assert m.rt_count is None
     assert m.small_sample is False
+
+
+# ─── 집계 기간 ────────────────────────────────────────────────────────────────
+
+
+def test_period_dates_extracted_from_history():
+    """hist.timestamp가 있으면 period_start·period_end가 채워진다."""
+    import calendar
+    from datetime import date
+
+    ts_start = calendar.timegm((2026, 5, 1, 0, 0, 0))
+    ts_end = calendar.timegm((2026, 8, 1, 0, 0, 0))
+
+    with patch("bstockreport.sources.alpaca.TradingClient") as MC:
+        inst = MC.return_value
+        h = MagicMock()
+        h.equity = [100.0, 101.0]
+        h.timestamp = [ts_start, ts_end]
+        inst.get_portfolio_history.return_value = h
+        inst.get_orders.return_value = []
+        inst.get_all_positions.return_value = []
+        inst.get_account.return_value = _account(10000, 5000)
+        m = _source().collect()
+
+    assert m.period_start == date(2026, 5, 1)
+    assert m.period_end == date(2026, 8, 1)
+
+
+def test_period_dates_none_when_timestamp_absent():
+    """hist.timestamp가 리스트가 아니면 period_start·period_end는 None이다."""
+    with patch("bstockreport.sources.alpaca.TradingClient") as MC:
+        inst = MC.return_value
+        _setup(
+            inst,
+            equity=[100.0, 101.0],
+            orders=[],
+            positions=[],
+            acct_equity=10000,
+            acct_cash=5000,
+        )
+        m = _source().collect()
+
+    assert m.period_start is None
+    assert m.period_end is None

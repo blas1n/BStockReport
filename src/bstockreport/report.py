@@ -79,6 +79,11 @@ def build(metrics: list[SourceMetrics], *, verbatim: bool) -> str:
 
     body = f"\n{_SEP}\n".join(blocks)
 
+    starts = [m.period_start for m in metrics if m.period_start is not None]
+    ends = [m.period_end for m in metrics if m.period_end is not None]
+    if starts and ends:
+        body = body + f"\n집계 기간: {min(starts)} ~ {max(ends)}"
+
     if verbatim:
         return f"<<REPORT_VERBATIM>>\n{body}\n<<END>>"
     return body

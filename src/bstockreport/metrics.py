@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import date
 
 
 @dataclass
@@ -38,3 +39,7 @@ class SourceMetrics:
     baseline: str | None = None
     baseline_trade_pct: float | None = None
     baseline_win_pct: float | None = None
+
+    # 집계 기간
+    period_start: date | None = None
+    period_end: date | None = None
