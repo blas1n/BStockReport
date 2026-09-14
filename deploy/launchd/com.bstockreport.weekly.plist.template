@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  템플릿이다. 그대로 쓰면 동작하지 않는다.
+
+  launchd 는 셸이 아니라서 `$HOME` 같은 변수를 확장하지 않는다 — plist 의 경로는
+  반드시 리터럴 절대경로여야 한다. 설치할 때 `__BSR_DIR__` 를 이 repo 의 절대경로로
+  치환해라:
+
+      sed "s#__BSR_DIR__#$PWD#g" deploy/launchd/com.bstockreport.weekly.plist.template \
+        > ~/Library/LaunchAgents/com.bstockreport.weekly.plist
+      mkdir -p logs
+      launchctl load ~/Library/LaunchAgents/com.bstockreport.weekly.plist
+
+  StartCalendarInterval 은 **로컬 시간**으로 평가된다(BSVibe 스케줄의 cron 이 UTC 인
+  것과 다르다). 아래 값은 월요일 09:30 로컬이다.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.bstockreport.weekly</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__BSR_DIR__/scripts/weekly-report.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key><integer>1</integer>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+  <key>StandardOutPath</key><string>__BSR_DIR__/logs/launchd.out</string>
+  <key>StandardErrorPath</key><string>__BSR_DIR__/logs/launchd.err</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>

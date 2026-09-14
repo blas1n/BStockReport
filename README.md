@@ -33,7 +33,14 @@ BSVibe 에이전트는 그 블록을 **그대로 복사**하고 해설만 아래
 
 ## 개발
 
-설계 문서: `docs/DESIGN.md` (구현은 이 문서를 따른다)
+| 문서 | 역할 |
+|---|---|
+| [`docs/DESIGN.md`](docs/DESIGN.md) | **설계 SoT** — 구현은 이 문서를 따른다 |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | 무엇이 끝났고 **어떤 함정을 밟았는지** |
+| `docs/M*_SPEC.md` | 마일스톤별 구현 사양 |
+
+주간 실행(launchd) 설치법은 [`deploy/launchd/com.bstockreport.weekly.plist.template`](deploy/launchd/com.bstockreport.weekly.plist.template)
+첫머리 주석에 있다 — **그 파일은 템플릿이라 그대로 쓰면 동작하지 않는다**(launchd 는 `$HOME` 을 확장하지 않는다).
 
 ```bash
 uv sync --extra dev
