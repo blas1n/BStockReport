@@ -163,12 +163,12 @@ bloasis는 **Alpaca 페이퍼 계좌**(`AlpacaBrokerAdapter(mode="paper")`, `blo
 
 1. **로컬 Ollama 직접**(Mode A / launchd): `http://localhost:11434/api/chat`,
    `LLM_MODEL=qwen3-coder:30b`(Ollama 0.15.5가 로드 가능한 유일한 고품질 한국어 모델),
-   `LLM_TIMEOUT_S=180`. → `[[macmini-ollama-timeout-and-arch-traps]]`(curl `--max-time`, 아키 미지원).
+   `LLM_TIMEOUT_S=180`.(curl `--max-time`, 아키 미지원).
 2. **BSVibe 모델 라우팅**(Mode B / dogfooding): BSVibe `litellm` ModelAccount 등록 →
    런타임에 `litellm.acompletion(model="ollama_chat/qwen3-coder:30b", api_base=...)` 실호출
-   (`backend/dispatch/adapter.py:308-336` 검증). `[[feedback_ollama_litellm_config]]`: 항상 `ollama_chat/`.
+   (BSVibe 어댑터 코드로 검증). 항상 `ollama_chat/`.
    ⚠️ 호출이 **워커 컨테이너**서 originate → `api_base=http://host.docker.internal:11434`
-   (임베딩이 이미 이 패턴: `deploy/.env.prod` `BSVIBE_KNOWLEDGE_EMBEDDING_API_BASE`).
+   (BSVibe 임베딩 설정이 이미 같은 패턴을 쓴다).
    compose에 `extra_hosts` 미선언이라 mac Docker Desktop은 자동 해결, Linux prod은 추가 필요.
 
 ## 8. 전송
@@ -181,10 +181,10 @@ bloasis는 **Alpaca 페이퍼 계좌**(`AlpacaBrokerAdapter(mode="paper")`, `blo
 ### 9-0. 역량 검증 결과 (bsvibe-app 코드 감사)
 | # | 역량 | 판정 | 근거 |
 |---|---|---|---|
-| 1 | 텔레그램 아웃바운드 | **IMPLEMENTED** | `plugin/telegram/client.py:95` 실 sendMessage, `plugin/telegram/plugin.py:94` `@p.outbound`, 카탈로그 `backend/connectors/catalog.py` |
-| 2 | 제품 스케줄/틱 | **IMPLEMENTED** | `workspace_schedules`(`schedule_db.py:52`)+cron advancer+프로덕션 `ScheduleWorker`(`worker_runtime.py:231`), REST `POST /api/v1/schedules`·MCP `bsvibe_schedules_create` |
+| 1 | 텔레그램 아웃바운드 | **IMPLEMENTED** | BSVibe 내부 모듈 실 sendMessage, BSVibe 내부 모듈 `@p.outbound`, 카탈로그 등록 |
+| 2 | 제품 스케줄/틱 | **IMPLEMENTED** | `workspace_schedules`(BSVibe 내부 모듈)+cron advancer+프로덕션 `ScheduleWorker`(BSVibe 내부 모듈), REST `POST /api/v1/schedules`·MCP `bsvibe_schedules_create` |
 | 3 | run→텍스트 딜리버(PR불요) | **PARTIAL** | 딜리버러블→텔레그램 텍스트 경로 완전배선·repo없는 run 가능, 그러나 출력은 **에이전트가 `emit_deliverable`로 authoring**(스크립트 stdout 캡처 아님) |
-| 4 | litellm 로컬모델 | **IMPLEMENTED** | `provider!="executor"`→`LiteLLMAdapter`(`adapter.py:842`)→`litellm.acompletion(model,api_base)`(`adapter.py:308`). ⚠️ 워커 컨테이너→호스트 Ollama `host.docker.internal:11434` |
+| 4 | litellm 로컬모델 | **IMPLEMENTED** | `provider!="executor"`→`LiteLLMAdapter`(BSVibe 내부 모듈)→`litellm.acompletion(model,api_base)`(BSVibe 내부 모듈). ⚠️ 워커 컨테이너→호스트 Ollama `host.docker.internal:11434` |
 
 **③ 함의 (설계 결정)**: BSVibe run은 "스크립트 stdout을 파이프"가 아니라 **LLM 에이전트가
 판단·수행·authoring**하는 모델. 그래서 **숫자는 결정적 도구(BStockReport)가, 해설·전송은 BSVibe가**
@@ -215,7 +215,7 @@ authoring→텔레그램 딜리버.
    확인 후 `direct`(자동전송) 전환.
 
 > 이 소프트-보장(에이전트 복붙)은 stdout 파이프의 하드-보장과 달라 **구조적 갭**이며,
-> **BSVibe 이슈 [#673](https://github.com/BSVibe/bsvibe-app/issues/673)** 로 등록됨(결정적 "도구 출력
+> **BSVibe 쪽 이슈로 등록됨**(결정적 "도구 출력
 > verbatim 딜리버러블" 프리미티브 요청 — 다른 세션이 처리). 위 2중 안전판은 그 프리미티브 생기기 전 우회.
 
 구체 배선(검증된 MCP/REST):
@@ -226,14 +226,14 @@ authoring→텔레그램 딜리버.
 2. **텔레그램 커넥터**: `bsvibe_connectors_create(connector="telegram", signing_secret=…,
    delivery_config={chat_id, bot_token})` → `bsvibe_bindings_create(product_id, connector_account_id,
    resource_id, output_mode=…)`. output_mode: **`safe`(승인큐)로 시작→검증되면 `direct`(자동전송)**.
-   (`[[telegram-interactive-approve-buttons]]` 교훈: bot_token≠webhook_secret 분리.)
+   (bot_token≠webhook_secret 분리.)
 3. **스케줄**: `bsvibe_schedules_create(kind="instruction", cron_expr="30 9 * * 1",
    text="bstockreport run --emit 실행→그 지표로 한국어 해설 작성→텔레그램 딜리버", product_id=…)`.
    (kind=`product_tick`도 가능하나 `instruction`이 작업을 명시적으로 지정해 더 안전.)
 4. 성공·안정 확인 후 launchd(Mode A) 은퇴. 그 전까진 **Mode A가 신뢰 폴백**.
 
 ### 9-C. 예상 마찰 (dogfooding의 실제 소득)
-- **샌드박스 실행 환경**(`[[bsvibe-executor-exec-model-and-reliability]]`: per-product DinD, deps·PG 없음):
+- **샌드박스 실행 환경**(per-product DinD, deps·PG 없음):
   `uv`/alpaca-py 프로비저닝, **Alpaca 페이퍼 키 2쌍 주입**, bloasis.db 접근(또는 baseline 생략).
 - **모델 라우팅 네트워킹**: 워커 컨테이너→호스트 Ollama `host.docker.internal`, compose `extra_hosts` 미선언
   (mac Docker Desktop 자동, Linux prod 추가 필요).
@@ -249,10 +249,3 @@ authoring→텔레그램 딜리버.
 - 리포트 주기: bstalk3r와 동일 월 09:30 KST **단일 결합 리포트**(권장) vs 소스별 분리.
 - BSVibe 실행 이관 시 Alpaca 키 관리 위치(워크스페이스 secret vs 호스트 워커 env).
 
-## 참고 메모리
-- `[[project_bstalk3r]]` §주간 보고서 한국어화(measure_paper 원본)
-- `[[macmini-ollama-timeout-and-arch-traps]]` 로컬 LLM 함정
-- `[[project_bloasis_paper_trading_layer]]` bloasis 페이퍼 계층
-- `[[bsvibe-executor-exec-model-and-reliability]]` 실행 모델·샌드박스
-- `[[feedback_ollama_litellm_config]]` ollama_chat/ 필수
-- `[[feedback_bsvibe_product_from_repo_bootstrap]]` 제품=bootstrap
