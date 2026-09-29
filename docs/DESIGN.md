@@ -153,6 +153,11 @@ bloasis는 **Alpaca 페이퍼 계좌**(`AlpacaBrokerAdapter(mode="paper")`, `blo
 - `report.build(metrics_list)` → 한국어 결합 리포트.
   - 헤더(날짜) + 소스별 블록(자산/체결/왕복/포지션/이상징후/🧠 해설) + 소스 간 구분선.
   - 소스 `ok=False`면 그 블록은 `⚠️ {name} 수집 실패: {error}` 한 줄로.
+  - 소스 헤더 바로 아래 **이번 주 줄**(`WeeklyMetrics`, `metrics.weekly_metrics`): 마지막 equity 날짜로
+    끝나는 **7 달력일** 창. 자산 기준값 = 창 시작 전 마지막 종가(보통 지난 금요일), 왕복 = 매도 체결일이
+    창 안인 것(FIFO 매칭은 전체 이력). 거래 0건이면 `왕복거래 없음`. 3개월 줄은 그대로 아래에 둔다.
+    7 달력일을 고른 이유: 월요일 리포트 주기와 일치하고, 휴장일이 창을 지난주로 밀지 않으며,
+    체결 시각을 거래일 달력 없이 날짜로 가를 수 있다.
 - `commentary`:
   - `anomaly_flags(m)` — 마진/낙폭≤-8%/체결률<85%/승률<45% (항상 규칙기반).
   - `rule_commentary(m)` — 총평+회귀·실행검증·리스크·마진·소표본 경고(measure_paper 이식).

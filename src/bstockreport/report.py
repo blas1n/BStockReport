@@ -1,7 +1,22 @@
 from bstockreport.commentary import anomaly_flags
-from bstockreport.metrics import SourceMetrics
+from bstockreport.metrics import SourceMetrics, WeeklyMetrics
 
 _SEP = "─" * 56
+
+
+def _week_line(w: WeeklyMetrics) -> str:
+    parts: list[str] = []
+    if w.equity_start is not None and w.equity_end is not None and w.ret_pct is not None:
+        parts.append(f"자산 ${w.equity_start:,.0f} → ${w.equity_end:,.0f} ({w.ret_pct:+.2f}%)")
+    if w.rt_count == 0:
+        parts.append("왕복거래 없음")
+    else:
+        parts.append(f"왕복거래 {w.rt_count}회")
+        if w.rt_avg_pct is not None:
+            parts.append(f"평균 {w.rt_avg_pct:+.2f}%")
+        if w.rt_win_pct is not None:
+            parts.append(f"승률 {w.rt_win_pct:.1f}%")
+    return f"이번 주({w.start} ~ {w.end}): " + " · ".join(parts)
 
 
 def build(metrics: list[SourceMetrics], *, verbatim: bool) -> str:
@@ -13,6 +28,10 @@ def build(metrics: list[SourceMetrics], *, verbatim: bool) -> str:
             continue
 
         lines: list[str] = [f"[{m.name}]"]
+
+        # 이번 주 — 주간 독자가 먼저 보는 줄. 3개월 줄은 아래에 그대로.
+        if m.week is not None:
+            lines.append(_week_line(m.week))
 
         # 자산곡선
         asset_parts: list[str] = []

@@ -1,13 +1,13 @@
 import math
 import statistics
 from collections import defaultdict, deque
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, OrderStatus, QueryOrderStatus
 from alpaca.trading.requests import GetOrdersRequest, GetPortfolioHistoryRequest
 
-from bstockreport.metrics import SourceMetrics
+from bstockreport.metrics import SourceMetrics, weekly_metrics
 from bstockreport.sources.base import Source
 
 
@@ -90,6 +90,8 @@ class AlpacaPaperSource(Source):
         filled_sorted = sorted(filled, key=lambda o: o.submitted_at)
         buy_queues: dict[str, deque] = defaultdict(deque)
         round_trip_returns: list[float] = []
+        # (청산일, 수익률) — 이번 주 창을 청산(매도 체결)일로 가른다
+        round_trip_closes: list[tuple[date, float]] = []
 
         for order in filled_sorted:
             symbol = order.symbol
@@ -99,10 +101,13 @@ class AlpacaPaperSource(Source):
             if order.side == OrderSide.BUY:
                 buy_queues[symbol].append([qty, price])
             elif order.side == OrderSide.SELL:
+                closed_on = (order.filled_at or order.submitted_at).astimezone(UTC).date()
                 remaining = qty
                 while remaining > 0 and buy_queues[symbol]:
                     lot = buy_queues[symbol][0]
-                    round_trip_returns.append((price - lot[1]) / lot[1])
+                    rt_ret = (price - lot[1]) / lot[1]
+                    round_trip_returns.append(rt_ret)
+                    round_trip_closes.append((closed_on, rt_ret))
                     if lot[0] <= remaining:
                         remaining -= lot[0]
                         buy_queues[symbol].popleft()
@@ -124,7 +129,12 @@ class AlpacaPaperSource(Source):
         small_sample = days < 60 or (rt_count is not None and rt_count < 30)
 
         # 집계 기간
-        valid_ts = [t for t, e in zip(raw_timestamps, equity_raw, strict=False) if e]
+        valid = [(t, e) for t, e in zip(raw_timestamps, equity_raw, strict=False) if e]
+        valid_ts = [t for t, _ in valid]
+        week = weekly_metrics(
+            [(datetime.fromtimestamp(t, tz=UTC).date(), float(e)) for t, e in valid],
+            round_trip_closes,
+        )
         if valid_ts:
             period_start = datetime.fromtimestamp(valid_ts[0], tz=UTC).date()
             period_end = datetime.fromtimestamp(valid_ts[-1], tz=UTC).date()
@@ -172,4 +182,5 @@ class AlpacaPaperSource(Source):
             baseline_win_pct=self._baseline_win_pct,
             period_start=period_start,
             period_end=period_end,
+            week=week,
         )

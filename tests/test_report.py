@@ -1,6 +1,6 @@
 from datetime import date
 
-from bstockreport.metrics import SourceMetrics
+from bstockreport.metrics import SourceMetrics, WeeklyMetrics
 from bstockreport.report import build
 
 
@@ -288,3 +288,61 @@ class TestPeriodFooter:
         )
         result = build([a, b], verbatim=False)
         assert "집계 기간: 2026-04-15 ~ 2026-08-05" in result
+
+
+# ── 이번 주 줄 ────────────────────────────────────────────────────────────────
+
+
+def _week(**kwargs) -> WeeklyMetrics:
+    base = dict(
+        start=date(2026, 9, 20),
+        end=date(2026, 9, 26),
+        equity_start=1_142_429.0,
+        equity_end=1_134_670.0,
+        ret_pct=-0.6792,
+        rt_count=16,
+        rt_avg_pct=0.5,
+        rt_win_pct=62.5,
+    )
+    base.update(kwargs)
+    return WeeklyMetrics(**base)
+
+
+class TestWeeklyLine:
+    def test_full_line_format(self):
+        result = build([_ok(week=_week())], verbatim=False)
+        assert (
+            "이번 주(2026-09-20 ~ 2026-09-26): 자산 $1,142,429 → $1,134,670 (-0.68%)"
+            " · 왕복거래 16회 · 평균 +0.50% · 승률 62.5%"
+        ) in result
+
+    def test_line_comes_right_after_source_header(self):
+        m = _ok(week=_week(), ret_pct=13.47)
+        lines = build([m], verbatim=False).splitlines()
+        assert lines[0] == "[TestSrc]"
+        assert lines[1].startswith("이번 주(")
+        assert lines[2] == "자산: 수익률 +13.47%"
+
+    def test_no_trades_is_said_not_divided(self):
+        w = _week(rt_count=0, rt_avg_pct=None, rt_win_pct=None)
+        result = build([_ok(week=w)], verbatim=False)
+        assert "(-0.68%) · 왕복거래 없음" in result
+        assert "평균" not in result
+        assert "승률" not in result
+
+    def test_no_equity_change_still_reports_trades(self):
+        w = _week(equity_start=None, equity_end=None, ret_pct=None, rt_count=0)
+        w.rt_avg_pct = None
+        w.rt_win_pct = None
+        result = build([_ok(week=w)], verbatim=False)
+        assert "이번 주(2026-09-20 ~ 2026-09-26): 왕복거래 없음" in result
+
+    def test_no_line_when_week_absent(self):
+        assert "이번 주" not in build([_ok(ret_pct=1.0)], verbatim=False)
+
+    def test_line_is_inside_verbatim_block_and_deterministic(self):
+        a = build([_ok(week=_week())], verbatim=True)
+        b = build([_ok(week=_week())], verbatim=True)
+        assert a == b
+        inner = a.removeprefix("<<REPORT_VERBATIM>>\n").removesuffix("\n<<END>>")
+        assert "이번 주(2026-09-20 ~ 2026-09-26)" in inner
