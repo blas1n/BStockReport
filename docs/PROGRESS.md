@@ -80,3 +80,7 @@ red 가 red 로 보이지 않는다.
 
 - Mode A: `bstockreport run --push` + launchd (설치는 `deploy/launchd/*.template` 주석 참조)
 - Mode B: 스케줄 실행 → 승인 큐 → 텔레그램 전달
+- `--push` 는 보낸 본문(숫자 블록 + 해설)을 `logs/report-YYYYMMDD-HHMMSS.txt` 로 남긴다
+  (`LOGS_DIR` 로 변경). 머리말 `# status: sent|unsent` — 전송 실패여도 시도한 본문은 남는다.
+  자격 값(텔레그램 토큰·chat id·Alpaca 키)은 `***` 로 가린다. 래퍼의 `weekly-*.log` 에는
+  `report saved: <경로> (sent|unsent)` 한 줄이 상태 줄 위에 찍힌다. (#2)

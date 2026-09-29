@@ -1,6 +1,8 @@
 import argparse
 import sys
+from datetime import datetime
 
+from bstockreport.archive import save_sent_report
 from bstockreport.baseline import load_bloasis_baseline
 from bstockreport.commentary import rule_commentary
 from bstockreport.config import Settings
@@ -77,7 +79,25 @@ def main() -> None:
     if commentary:
         full = report + "\n\n" + commentary
 
-    send_telegram(full, bot_token=settings.telegram_bot_token, chat_id=settings.telegram_chat_id)
+    sent = send_telegram(
+        full, bot_token=settings.telegram_bot_token, chat_id=settings.telegram_chat_id
+    )
+    saved = save_sent_report(
+        full,
+        logs_dir=settings.logs_dir,
+        sent=sent,
+        now=datetime.now().astimezone(),
+        secrets=[
+            settings.telegram_bot_token,
+            settings.telegram_chat_id,
+            settings.alpaca_api_key,
+            settings.alpaca_secret_key,
+            settings.alpaca_paper_api_key,
+            settings.alpaca_paper_api_secret,
+        ],
+    )
+    # stdout 은 비워 둔다(--push 계약). 래퍼가 2>&1 로 weekly-*.log 에 남긴다.
+    print(f"report saved: {saved} ({'sent' if sent else 'unsent'})", file=sys.stderr)
 
     if all_failed:
         sys.exit(1)

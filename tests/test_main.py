@@ -6,6 +6,14 @@ import bstockreport.main as main_mod
 from bstockreport.metrics import SourceMetrics
 
 
+@pytest.fixture(autouse=True)
+def _logs_dir(tmp_path, monkeypatch):
+    """--push 가 저장하는 리포트 사본이 레포 logs/ 를 더럽히지 않게 한다."""
+    logs = tmp_path / "logs"
+    monkeypatch.setenv("LOGS_DIR", str(logs))
+    return logs
+
+
 def _good_collect(self):
     return SourceMetrics(name=self._name, ok=True, ret_pct=2.0, rt_avg_pct=0.3, rt_win_pct=60.0)
 
@@ -231,3 +239,91 @@ def test_all_sources_success_exits_0(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["bstockreport", "run", "--push"])
 
     main_mod.main()  # SystemExit 발생 없이 정상 종료
+
+
+# ── 보낸 리포트 보관 (#2) ─────────────────────────────────────────────────────
+
+
+def _push_setup(monkeypatch, telegram_calls, *, ok=True):
+    def _send(text, **kw):
+        telegram_calls.append(text)
+        return ok
+
+    monkeypatch.setattr(main_mod.AlpacaPaperSource, "collect", _good_collect)
+    monkeypatch.setattr(main_mod, "send_telegram", _send)
+    monkeypatch.setattr(main_mod, "load_bloasis_baseline", lambda path: None)
+    monkeypatch.setattr(main_mod, "llm_commentary", lambda *a, **kw: "LLM 해설이에요.")
+    monkeypatch.setattr(sys, "argv", ["bstockreport", "run", "--push"])
+
+
+def _saved(logs):
+    files = sorted(logs.glob("report-*.txt"))
+    assert len(files) == 1, files
+    header, body = files[0].read_text(encoding="utf-8").split("\n\n", 1)
+    return header, body
+
+
+def test_push_saves_exact_text_sent(monkeypatch, _logs_dir):
+    telegram_calls: list = []
+    _push_setup(monkeypatch, telegram_calls)
+
+    main_mod.main()
+
+    header, body = _saved(_logs_dir)
+    assert body == telegram_calls[0]
+    assert "LLM 해설이에요." in body  # 해설
+    assert "수익률" in body  # 숫자 블록
+    assert "status: sent" in header
+
+
+def test_push_failed_send_still_saved_as_unsent(monkeypatch, _logs_dir):
+    telegram_calls: list = []
+    _push_setup(monkeypatch, telegram_calls, ok=False)
+
+    main_mod.main()
+
+    header, body = _saved(_logs_dir)
+    assert body == telegram_calls[0]
+    assert "status: unsent" in header
+
+
+def test_push_saved_file_has_no_telegram_secrets(monkeypatch, _logs_dir):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "999:SECRET-TOKEN")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "-100777")
+    telegram_calls: list = []
+    _push_setup(monkeypatch, telegram_calls)
+
+    main_mod.main()
+
+    content = next(_logs_dir.glob("report-*.txt")).read_text(encoding="utf-8")
+    assert "SECRET-TOKEN" not in content
+    assert "-100777" not in content
+
+
+def test_push_redacts_secret_leaked_into_report(monkeypatch, _logs_dir):
+    """수집 오류 문자열에 키가 섞여 들어와도 보관본에는 남지 않는다."""
+    monkeypatch.setenv("ALPACA_API_KEY", "AKLEAKED")
+
+    def leaky(self):
+        raise RuntimeError("auth failed for AKLEAKED")
+
+    telegram_calls: list = []
+    _push_setup(monkeypatch, telegram_calls)
+    monkeypatch.setattr(main_mod.AlpacaPaperSource, "collect", leaky)
+
+    with pytest.raises(SystemExit):
+        main_mod.main()
+
+    content = next(_logs_dir.glob("report-*.txt")).read_text(encoding="utf-8")
+    assert "AKLEAKED" not in content
+    assert "수집 실패" in content
+
+
+def test_emit_saves_nothing(monkeypatch, capsys, _logs_dir):
+    monkeypatch.setattr(main_mod.AlpacaPaperSource, "collect", _good_collect)
+    monkeypatch.setattr(main_mod, "load_bloasis_baseline", lambda path: None)
+    monkeypatch.setattr(sys, "argv", ["bstockreport", "run", "--emit"])
+
+    main_mod.main()
+
+    assert not _logs_dir.exists() or not list(_logs_dir.glob("report-*.txt"))
