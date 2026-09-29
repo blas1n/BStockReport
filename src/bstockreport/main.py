@@ -99,5 +99,9 @@ def main() -> None:
     # stdout 은 비워 둔다(--push 계약). 래퍼가 2>&1 로 weekly-*.log 에 남긴다.
     print(f"report saved: {saved} ({'sent' if sent else 'unsent'})", file=sys.stderr)
 
+    # 전송 실패는 보관본을 남긴 *뒤에* 비정상 종료 — 래퍼가 '전송 완료'로 적지 않게.
+    # 아무것도 배달되지 않은 쪽이 전 소스 실패(1)보다 무거우므로 2 가 우선한다.
+    if not sent:
+        sys.exit(2)
     if all_failed:
         sys.exit(1)

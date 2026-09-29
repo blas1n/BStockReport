@@ -280,11 +280,41 @@ def test_push_failed_send_still_saved_as_unsent(monkeypatch, _logs_dir):
     telegram_calls: list = []
     _push_setup(monkeypatch, telegram_calls, ok=False)
 
-    main_mod.main()
+    with pytest.raises(SystemExit):
+        main_mod.main()
 
     header, body = _saved(_logs_dir)
     assert body == telegram_calls[0]
     assert "status: unsent" in header
+
+
+def test_push_failed_send_exits_nonzero_after_saving(monkeypatch, _logs_dir):
+    """전송 실패 → 보관본(unsent)을 남긴 뒤 종료 코드 2. 래퍼가 '전송 완료'로 적지 않게."""
+    telegram_calls: list = []
+    _push_setup(monkeypatch, telegram_calls, ok=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_mod.main()
+
+    assert exc_info.value.code == 2
+    header, _ = _saved(_logs_dir)
+    assert "status: unsent" in header
+
+
+def test_push_failed_send_wins_over_all_sources_failed(monkeypatch, _logs_dir):
+    """아무것도 배달되지 않은 쪽이 더 무겁다 — 전 소스 실패여도 전송 실패면 2."""
+
+    def always_fail(self):
+        raise RuntimeError("always fails")
+
+    telegram_calls: list = []
+    _push_setup(monkeypatch, telegram_calls, ok=False)
+    monkeypatch.setattr(main_mod.AlpacaPaperSource, "collect", always_fail)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_mod.main()
+
+    assert exc_info.value.code == 2
 
 
 def test_push_saved_file_has_no_telegram_secrets(monkeypatch, _logs_dir):
