@@ -53,3 +53,12 @@ def test_extra_env_ignored(monkeypatch):
     monkeypatch.setenv("UNKNOWN_VAR_XYZ", "anything")
     s = Settings()
     assert not hasattr(s, "unknown_var_xyz")
+
+
+def test_logs_dir_default_and_override(monkeypatch):
+    from pathlib import Path
+
+    monkeypatch.delenv("LOGS_DIR", raising=False)
+    assert Settings(_env_file=None).logs_dir == Path("logs")
+    monkeypatch.setenv("LOGS_DIR", "/var/tmp/bsr-logs")
+    assert Settings(_env_file=None).logs_dir == Path("/var/tmp/bsr-logs")

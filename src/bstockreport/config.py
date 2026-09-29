@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,3 +16,5 @@ class Settings(BaseSettings):
     llm_timeout_s: float = 180.0
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    # --push 가 보낸 본문을 남기는 곳. launchd 래퍼의 weekly-*.log 와 같은 디렉터리.
+    logs_dir: Path = Path("logs")
