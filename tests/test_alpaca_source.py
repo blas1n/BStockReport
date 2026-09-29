@@ -563,3 +563,67 @@ def test_week_is_none_without_timestamps():
         m = _source().collect()
 
     assert m.week is None
+
+
+# ─── 비용 반영(연구 비용 가정) ────────────────────────────────────────────────
+
+
+def _collect_round_trips(orders, **kwargs):
+    with patch("bstockreport.sources.alpaca.TradingClient") as MC:
+        inst = MC.return_value
+        _setup(
+            inst,
+            equity=[100.0, 101.0],
+            orders=orders,
+            positions=[],
+            acct_equity=10000,
+            acct_cash=5000,
+        )
+        return _source(**kwargs).collect()
+
+
+def test_repriced_subtracts_two_legs_from_each_fifo_round_trip():
+    """FIFO 왕복 2건(+20%, +10/110) 각각에서 2 × 10bp 를 뺀다."""
+    b1 = _order("AAPL", OrderSide.BUY, 10, 100.0, t=0)
+    b2 = _order("AAPL", OrderSide.BUY, 5, 110.0, t=1)
+    s = _order("AAPL", OrderSide.SELL, 12, 120.0, t=2)
+
+    m = _collect_round_trips([b1, b2, s], cost_per_leg=0.001)
+
+    net = [0.2 - 0.002, 10 / 110 - 0.002]
+    assert m.repriced is not None
+    assert m.repriced.cost_per_leg == 0.001
+    assert m.repriced.rt_count == 2
+    assert m.repriced.avg_pct == pytest.approx(statistics.mean(net) * 100)
+    assert m.repriced.win_pct == pytest.approx(100.0)
+    # 원래 페이퍼 숫자는 그대로
+    assert m.rt_avg_pct == pytest.approx(statistics.mean([0.2, 10 / 110]) * 100)
+
+
+def test_repriced_turns_small_paper_win_into_loss():
+    b = _order("AAPL", OrderSide.BUY, 10, 100.0, t=0)
+    s = _order("AAPL", OrderSide.SELL, 10, 100.1, t=1)  # +0.1%
+
+    m = _collect_round_trips([b, s], cost_per_leg=0.001)
+
+    assert m.rt_win_pct == pytest.approx(100.0)
+    assert m.repriced.win_pct == pytest.approx(0.0)
+    assert m.repriced.avg_pct == pytest.approx(-0.1)
+
+
+def test_repriced_with_no_round_trips_reports_zero():
+    b = _order("AAPL", OrderSide.BUY, 10, 100.0, t=0)
+
+    m = _collect_round_trips([b], cost_per_leg=0.001)
+
+    assert m.rt_count is None
+    assert m.repriced.rt_count == 0
+    assert m.repriced.avg_pct is None
+    assert m.repriced.win_pct is None
+
+
+def test_repriced_absent_without_cost():
+    b = _order("AAPL", OrderSide.BUY, 10, 100.0, t=0)
+    s = _order("AAPL", OrderSide.SELL, 10, 120.0, t=1)
+
+    assert _collect_round_trips([b, s]).repriced is None

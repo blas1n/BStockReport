@@ -96,6 +96,10 @@ class SourceMetrics:
     baseline: str | None = None  # 예: "거래당 +0.32% · 승률 63% · Sharpe ~0.72"
     baseline_trade_pct: float | None = None
     baseline_win_pct: float | None = None
+
+    # 연구 비용 가정으로 다시 매긴 왕복(COST_PER_LEG, 기본 0.001 = 10bp/leg).
+    # 페이퍼 체결은 그대로, 왕복마다 2 × cost_per_leg 를 뺀다. None이면 줄 생략
+    repriced: RepricedRoundTrips | None = None  # cost_per_leg · rt_count · avg_pct · win_pct
 ```
 
 > 소스마다 없는 필드는 None → 리포트/해설이 자동으로 해당 줄을 생략(measure_paper의 `if key in m` 패턴).

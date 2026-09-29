@@ -1,6 +1,6 @@
 from datetime import date
 
-from bstockreport.metrics import SourceMetrics, WeeklyMetrics
+from bstockreport.metrics import RepricedRoundTrips, SourceMetrics, WeeklyMetrics
 from bstockreport.report import build
 
 
@@ -346,3 +346,65 @@ class TestWeeklyLine:
         assert a == b
         inner = a.removeprefix("<<REPORT_VERBATIM>>\n").removesuffix("\n<<END>>")
         assert "이번 주(2026-09-20 ~ 2026-09-26)" in inner
+
+
+# ── 비용 반영 줄 ──────────────────────────────────────────────────────────────
+
+
+def _repriced(**kwargs) -> RepricedRoundTrips:
+    base = dict(cost_per_leg=0.001, rt_count=67, avg_pct=1.05, win_pct=64.2)
+    base.update(kwargs)
+    return RepricedRoundTrips(**base)
+
+
+class TestRepricedLine:
+    def test_full_line_format(self):
+        result = build([_ok(repriced=_repriced())], verbatim=False)
+        assert (
+            "비용 반영(10bp/leg): 평균 +1.05% · 승률 64.2% · 페이퍼 체결은 실제보다 저렴"
+        ) in result.splitlines()
+
+    def test_cost_label_follows_configured_cost(self):
+        result = build([_ok(repriced=_repriced(cost_per_leg=0.0015))], verbatim=False)
+        assert "비용 반영(15bp/leg):" in result
+
+    def test_negative_average_is_signed(self):
+        result = build([_ok(repriced=_repriced(avg_pct=-0.12))], verbatim=False)
+        assert "비용 반영(10bp/leg): 평균 -0.12%" in result
+
+    def test_no_round_trips_is_said_not_divided(self):
+        r = _repriced(rt_count=0, avg_pct=None, win_pct=None)
+        result = build([_ok(repriced=r)], verbatim=False)
+        assert (
+            "비용 반영(10bp/leg): 왕복거래 없음 · 페이퍼 체결은 실제보다 저렴"
+        ) in result.splitlines()
+
+    def test_line_comes_right_after_round_trip_line(self):
+        m = _ok(rt_count=67, rt_avg_pct=1.25, rt_win_pct=70.1, pos_count=3, repriced=_repriced())
+        lines = build([m], verbatim=False).splitlines()
+        i = lines.index("왕복거래: 67회 · 평균 +1.25% · 승률 70.1%")
+        assert lines[i + 1].startswith("비용 반영(10bp/leg):")
+        assert lines[i + 2].startswith("포지션:")
+
+    def test_existing_lines_unchanged(self):
+        kw = dict(
+            week=_week(),
+            ret_pct=13.47,
+            fills=10,
+            rt_count=67,
+            rt_avg_pct=1.25,
+            rt_med_pct=0.9,
+            rt_win_pct=70.1,
+            pos_count=3,
+        )
+        before = build([_ok(**kw)], verbatim=True).splitlines()
+        after = build([_ok(**kw, repriced=_repriced())], verbatim=True).splitlines()
+        assert [ln for ln in after if not ln.startswith("비용 반영(")] == before
+
+    def test_no_line_when_repriced_absent(self):
+        assert "비용 반영" not in build([_ok(rt_count=3, rt_avg_pct=1.0)], verbatim=False)
+
+    def test_line_is_inside_verbatim_block(self):
+        a = build([_ok(repriced=_repriced())], verbatim=True)
+        inner = a.removeprefix("<<REPORT_VERBATIM>>\n").removesuffix("\n<<END>>")
+        assert "비용 반영(10bp/leg):" in inner

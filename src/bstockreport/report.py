@@ -1,5 +1,5 @@
 from bstockreport.commentary import anomaly_flags
-from bstockreport.metrics import SourceMetrics, WeeklyMetrics
+from bstockreport.metrics import RepricedRoundTrips, SourceMetrics, WeeklyMetrics
 
 _SEP = "─" * 56
 
@@ -17,6 +17,19 @@ def _week_line(w: WeeklyMetrics) -> str:
         if w.rt_win_pct is not None:
             parts.append(f"승률 {w.rt_win_pct:.1f}%")
     return f"이번 주({w.start} ~ {w.end}): " + " · ".join(parts)
+
+
+def _repriced_line(r: RepricedRoundTrips) -> str:
+    parts: list[str] = []
+    if r.rt_count == 0:
+        parts.append("왕복거래 없음")
+    else:
+        if r.avg_pct is not None:
+            parts.append(f"평균 {r.avg_pct:+.2f}%")
+        if r.win_pct is not None:
+            parts.append(f"승률 {r.win_pct:.1f}%")
+    parts.append("페이퍼 체결은 실제보다 저렴")
+    return f"비용 반영({round(r.cost_per_leg * 1e4, 2):g}bp/leg): " + " · ".join(parts)
 
 
 def build(metrics: list[SourceMetrics], *, verbatim: bool) -> str:
@@ -73,6 +86,10 @@ def build(metrics: list[SourceMetrics], *, verbatim: bool) -> str:
             rt_parts.append(f"승률 {m.rt_win_pct:.1f}%")
         if rt_parts:
             lines.append("왕복거래: " + " · ".join(rt_parts))
+
+        # 연구 비용 가정으로 다시 매긴 왕복 — 페이퍼 체결은 실제보다 싸다
+        if m.repriced is not None:
+            lines.append(_repriced_line(m.repriced))
 
         # 포지션·현금
         pos_parts: list[str] = []

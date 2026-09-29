@@ -60,6 +60,33 @@ def weekly_metrics(
 
 
 @dataclass
+class RepricedRoundTrips:
+    """페이퍼 왕복을 연구 비용 가정으로 다시 매긴 것. 수익률은 %(1.0 = 1%)."""
+
+    cost_per_leg: float
+    rt_count: int
+    avg_pct: float | None
+    win_pct: float | None
+
+
+def repriced_round_trips(returns: list[float], cost_per_leg: float) -> RepricedRoundTrips:
+    """페이퍼 체결은 그대로 두고 왕복마다 2 × cost_per_leg 를 뺀다(returns 는 소수).
+
+    페이퍼 체결 비용(~3bp 왕복)이 실제보다 싸서, 연구 가정(편도 10bp)으로 다시 매긴 숫자를
+    옆에 둔다. 비용 이후 0 은 승리로 세지 않는다. 왕복이 없으면 나누지 않고 None.
+    """
+    net = [r - 2 * cost_per_leg for r in returns]
+    if not net:
+        return RepricedRoundTrips(cost_per_leg=cost_per_leg, rt_count=0, avg_pct=None, win_pct=None)
+    return RepricedRoundTrips(
+        cost_per_leg=cost_per_leg,
+        rt_count=len(net),
+        avg_pct=statistics.mean(net) * 100,
+        win_pct=sum(1 for r in net if r > 0) / len(net) * 100,
+    )
+
+
+@dataclass
 class SourceMetrics:
     name: str
     ok: bool
@@ -103,3 +130,6 @@ class SourceMetrics:
 
     # 이번 주(최근 7일) — 3개월 지표와 별도
     week: WeeklyMetrics | None = None
+
+    # 연구 비용 가정으로 다시 매긴 왕복 — None 이면 줄 생략
+    repriced: RepricedRoundTrips | None = None
