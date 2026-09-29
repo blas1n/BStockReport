@@ -28,6 +28,7 @@ def _order(symbol, side, qty, price=None, status=OrderStatus.FILLED, t=0):
     o.filled_avg_price = Decimal(str(price)) if price is not None else None
     o.status = status
     o.submitted_at = datetime(2024, 1, 1, 0, t, 0, tzinfo=UTC)
+    o.filled_at = None
     return o
 
 
@@ -463,3 +464,102 @@ def test_period_dates_none_when_timestamp_absent():
 
     assert m.period_start is None
     assert m.period_end is None
+
+
+# ─── 이번 주 지표 ─────────────────────────────────────────────────────────────
+
+
+def _ts(y, mo, d):
+    import calendar
+
+    return calendar.timegm((y, mo, d, 4, 0, 0))
+
+
+def _weekly_order(symbol, side, qty, price, *, filled, submitted=None):
+    o = _order(symbol, side, qty, price)
+    o.filled_at = filled
+    if submitted is not None:
+        o.submitted_at = submitted
+    return o
+
+
+def _collect_with_history(equity, timestamps, orders):
+    with patch("bstockreport.sources.alpaca.TradingClient") as MC:
+        inst = MC.return_value
+        h = MagicMock()
+        h.equity = equity
+        h.timestamp = timestamps
+        inst.get_portfolio_history.return_value = h
+        inst.get_orders.return_value = orders
+        inst.get_all_positions.return_value = []
+        inst.get_account.return_value = _account(10000, 5000)
+        return _source().collect()
+
+
+def test_week_uses_last_equity_date_and_close_date_of_sell():
+    """매수는 지난주, 매도는 이번 주 → 이번 주 왕복 1건(FIFO 는 전체 이력으로 매칭)."""
+    from datetime import date
+
+    ts = [_ts(2026, 9, 12), _ts(2026, 9, 19), _ts(2026, 9, 26)]
+    old_buy = _weekly_order(
+        "AAPL", OrderSide.BUY, 10, 100.0, filled=datetime(2026, 9, 10, 14, tzinfo=UTC)
+    )
+    old_sell = _weekly_order(
+        "AAPL", OrderSide.SELL, 5, 90.0, filled=datetime(2026, 9, 15, 14, tzinfo=UTC)
+    )
+    week_sell = _weekly_order(
+        "AAPL", OrderSide.SELL, 5, 110.0, filled=datetime(2026, 9, 24, 14, tzinfo=UTC)
+    )
+    m = _collect_with_history([1000.0, 1100.0, 1045.0], ts, [old_buy, old_sell, week_sell])
+
+    assert m.rt_count == 2  # 3개월 지표는 그대로
+    assert m.week is not None
+    assert m.week.start == date(2026, 9, 20)
+    assert m.week.end == date(2026, 9, 26)
+    assert m.week.equity_start == pytest.approx(1100.0)
+    assert m.week.equity_end == pytest.approx(1045.0)
+    assert m.week.ret_pct == pytest.approx(-5.0)
+    assert m.week.rt_count == 1
+    assert m.week.rt_avg_pct == pytest.approx(10.0)
+    assert m.week.rt_win_pct == pytest.approx(100.0)
+
+
+def test_week_close_date_falls_back_to_submitted_at_without_filled_at():
+    ts = [_ts(2026, 9, 19), _ts(2026, 9, 26)]
+    buy = _weekly_order(
+        "MSFT",
+        OrderSide.BUY,
+        1,
+        100.0,
+        filled=None,
+        submitted=datetime(2026, 9, 22, 14, tzinfo=UTC),
+    )
+    sell = _weekly_order(
+        "MSFT",
+        OrderSide.SELL,
+        1,
+        99.0,
+        filled=None,
+        submitted=datetime(2026, 9, 23, 14, tzinfo=UTC),
+    )
+    m = _collect_with_history([1000.0, 1000.0], ts, [buy, sell])
+
+    assert m.week.rt_count == 1
+    assert m.week.rt_win_pct == pytest.approx(0.0)
+
+
+def test_week_has_no_trades_when_nothing_closed_this_week():
+    ts = [_ts(2026, 9, 19), _ts(2026, 9, 26)]
+    m = _collect_with_history([1000.0, 1010.0], ts, [])
+
+    assert m.week.rt_count == 0
+    assert m.week.rt_avg_pct is None
+
+
+def test_week_is_none_without_timestamps():
+    with patch("bstockreport.sources.alpaca.TradingClient") as MC:
+        inst = MC.return_value
+        _setup(inst, equity=[100.0, 101.0], orders=[], positions=[], acct_equity=1, acct_cash=1)
+        m = _source().collect()
+
+    assert m.week is None
