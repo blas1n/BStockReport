@@ -7,7 +7,7 @@ from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, OrderStatus, QueryOrderStatus
 from alpaca.trading.requests import GetOrdersRequest, GetPortfolioHistoryRequest
 
-from bstockreport.metrics import SourceMetrics, weekly_metrics
+from bstockreport.metrics import SourceMetrics, repriced_round_trips, weekly_metrics
 from bstockreport.sources.base import Source
 
 
@@ -20,6 +20,7 @@ class AlpacaPaperSource(Source):
         baseline: str | None = None,
         baseline_trade_pct: float | None = None,
         baseline_win_pct: float | None = None,
+        cost_per_leg: float | None = None,
     ) -> None:
         self._name = name
         self._api_key = api_key
@@ -27,6 +28,7 @@ class AlpacaPaperSource(Source):
         self._baseline = baseline
         self._baseline_trade_pct = baseline_trade_pct
         self._baseline_win_pct = baseline_win_pct
+        self._cost_per_leg = cost_per_leg
 
     @property
     def name(self) -> str:
@@ -183,4 +185,9 @@ class AlpacaPaperSource(Source):
             period_start=period_start,
             period_end=period_end,
             week=week,
+            repriced=(
+                repriced_round_trips(round_trip_returns, self._cost_per_leg)
+                if self._cost_per_leg is not None
+                else None
+            ),
         )

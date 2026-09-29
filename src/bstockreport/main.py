@@ -37,6 +37,7 @@ def main() -> None:
             baseline="거래당 +0.32% · 승률 63% · Sharpe ~0.72",
             baseline_trade_pct=0.32,
             baseline_win_pct=63.0,
+            cost_per_leg=settings.cost_per_leg,
         ),
         AlpacaPaperSource(
             "Bloasis",
@@ -45,6 +46,7 @@ def main() -> None:
             baseline=bloasis_bl.text if bloasis_bl else None,
             baseline_trade_pct=bloasis_bl.trade_pct if bloasis_bl else None,
             baseline_win_pct=bloasis_bl.win_pct if bloasis_bl else None,
+            cost_per_leg=settings.cost_per_leg,
         ),
     ]
 

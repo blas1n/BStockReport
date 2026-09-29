@@ -357,3 +357,59 @@ def test_emit_saves_nothing(monkeypatch, capsys, _logs_dir):
     main_mod.main()
 
     assert not _logs_dir.exists() or not list(_logs_dir.glob("report-*.txt"))
+
+
+# ── 비용 반영 줄: 두 소스 모두 설정 비용으로 ──────────────────────────────────
+
+
+def test_emit_reprices_both_sources_at_configured_cost(monkeypatch, capsys):
+    """실제 collect() 를 돌리고 TradingClient 만 가짜로. 두 호출 지점 모두 비용을 받아야 한다."""
+    from datetime import UTC, datetime
+    from decimal import Decimal
+    from unittest.mock import MagicMock, patch
+
+    from alpaca.trading.enums import OrderSide, OrderStatus
+
+    def _order(side, price, minute):
+        o = MagicMock()
+        o.symbol = "AAPL"
+        o.side = side
+        o.filled_qty = Decimal("10")
+        o.filled_avg_price = Decimal(str(price))
+        o.status = OrderStatus.FILLED
+        o.submitted_at = datetime(2026, 9, 1, 19, minute, tzinfo=UTC)
+        o.filled_at = None
+        return o
+
+    for var, val in {
+        "ALPACA_API_KEY": "k1",
+        "ALPACA_SECRET_KEY": "s1",
+        "ALPACA_PAPER_API_KEY": "k2",
+        "ALPACA_PAPER_API_SECRET": "s2",
+        "COST_PER_LEG": "0.002",
+    }.items():
+        monkeypatch.setenv(var, val)
+    monkeypatch.setattr(main_mod, "load_bloasis_baseline", lambda path: None)
+    monkeypatch.setattr(sys, "argv", ["bstockreport", "run", "--emit"])
+
+    with patch("bstockreport.sources.alpaca.TradingClient") as MC:
+        inst = MC.return_value
+        hist = MagicMock()
+        hist.equity = [100.0, 101.0]
+        hist.timestamp = None
+        inst.get_portfolio_history.return_value = hist
+        inst.get_orders.return_value = [
+            _order(OrderSide.BUY, 100.0, 0),
+            _order(OrderSide.SELL, 101.0, 1),
+        ]
+        inst.get_all_positions.return_value = []
+        acct = MagicMock()
+        acct.equity = "10000"
+        acct.cash = "5000"
+        inst.get_account.return_value = acct
+        main_mod.main()
+
+    out = capsys.readouterr().out
+    # +1.00% 페이퍼 왕복 − 2 × 20bp = +0.60%
+    line = "비용 반영(20bp/leg): 평균 +0.60% · 승률 100.0% · 페이퍼 체결은 실제보다 저렴"
+    assert out.splitlines().count(line) == 2
