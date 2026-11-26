@@ -5,7 +5,8 @@
 # 텔레그램으로 보낸다. 자격은 이 디렉터리의 .env 에서 온다(gitignored).
 set -euo pipefail
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+# ~/.local/bin: Claude Code CLI (LLM_BACKEND=claude). Without it the job silently falls back to Ollama.
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
