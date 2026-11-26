@@ -7,7 +7,7 @@ from bstockreport.baseline import load_bloasis_baseline
 from bstockreport.commentary import rule_commentary
 from bstockreport.config import Settings
 from bstockreport.delivery import send_telegram
-from bstockreport.llm import llm_commentary
+from bstockreport.llm import claude_commentary, llm_commentary
 from bstockreport.metrics import SourceMetrics
 from bstockreport.report import build
 from bstockreport.sources.alpaca import AlpacaPaperSource
@@ -67,12 +67,18 @@ def main() -> None:
             sys.exit(1)
         return
 
-    commentary = llm_commentary(
-        report,
-        model=settings.llm_model,
-        host=settings.ollama_host,
-        timeout_s=settings.llm_timeout_s,
-    )
+    commentary = None
+    if settings.llm_backend == "claude":
+        commentary = claude_commentary(
+            report, timeout_s=settings.llm_timeout_s, model=settings.claude_model
+        )
+    if commentary is None:
+        commentary = llm_commentary(
+            report,
+            model=settings.llm_model,
+            host=settings.ollama_host,
+            timeout_s=settings.llm_timeout_s,
+        )
     if commentary is None:
         parts = [rule_commentary(m) for m in metrics if m.ok]
         commentary = "\n\n".join(parts) if parts else ""

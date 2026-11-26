@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -15,6 +16,10 @@ class Settings(BaseSettings):
     llm_model: str = "qwen3-coder:30b"
     ollama_host: str = "http://localhost:11434"
     llm_timeout_s: float = 180.0
+    # "claude": Claude Code CLI (`claude -p`) first, then Ollama, then rules.
+    # "ollama": Ollama, then rules.
+    llm_backend: Literal["ollama", "claude"] = "ollama"
+    claude_model: str | None = None
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     # --push 가 보낸 본문을 남기는 곳. launchd 래퍼의 weekly-*.log 와 같은 디렉터리.

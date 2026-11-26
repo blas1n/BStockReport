@@ -1,5 +1,6 @@
 import json
 import re
+import subprocess
 import urllib.request
 
 _SYSTEM_PROMPT = (
@@ -48,3 +49,35 @@ def llm_commentary(report_text: str, *, model: str, host: str, timeout_s: float)
         return None
 
     return content
+
+
+#: A plain completion: no tools (a tool-enabled session spends turns looking around instead of
+#: answering), no MCP servers, no user CLAUDE.md / skills.
+_CLAUDE_FLAGS = (
+    "--disallowedTools",
+    "*",
+    "--strict-mcp-config",
+    "--mcp-config",
+    '{"mcpServers": {}}',
+    "--setting-sources",
+    "",
+)
+
+
+def claude_commentary(
+    report_text: str, *, timeout_s: float, model: str | None = None, claude_bin: str = "claude"
+) -> str | None:
+    """Commentary from Claude Code's CLI (``claude -p``), or ``None`` on any failure."""
+    argv = [claude_bin, "-p", "--system-prompt", _SYSTEM_PROMPT, *_CLAUDE_FLAGS]
+    if model:
+        argv += ["--model", model]
+    try:
+        proc = subprocess.run(
+            argv, input=report_text, capture_output=True, text=True, timeout=timeout_s, check=False
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if proc.returncode != 0:
+        return None
+    content = (proc.stdout or "").strip()
+    return content if len(content) >= 30 else None

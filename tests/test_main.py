@@ -413,3 +413,47 @@ def test_emit_reprices_both_sources_at_configured_cost(monkeypatch, capsys):
     # +1.00% 페이퍼 왕복 − 2 × 20bp = +0.60%
     line = "비용 반영(20bp/leg): 평균 +0.60% · 승률 100.0% · 페이퍼 체결은 실제보다 저렴"
     assert out.splitlines().count(line) == 2
+
+
+# ── LLM backend: claude → ollama → rules ──────────────────────────────────────
+
+
+def _push_with(monkeypatch, backend, claude_result, ollama_result):
+    telegram_calls: list = []
+    order: list = []
+    monkeypatch.setenv("LLM_BACKEND", backend)
+    monkeypatch.setattr(main_mod.AlpacaPaperSource, "collect", _good_collect)
+    monkeypatch.setattr(main_mod, "send_telegram", _fake_send(telegram_calls))
+    monkeypatch.setattr(main_mod, "load_bloasis_baseline", lambda path: None)
+
+    def _claude(*a, **kw):
+        order.append("claude")
+        return claude_result
+
+    def _ollama(*a, **kw):
+        order.append("ollama")
+        return ollama_result
+
+    monkeypatch.setattr(main_mod, "claude_commentary", _claude)
+    monkeypatch.setattr(main_mod, "llm_commentary", _ollama)
+    monkeypatch.setattr(sys, "argv", ["bstockreport", "run", "--push"])
+    main_mod.main()
+    return telegram_calls, order
+
+
+def test_claude_backend_uses_claude_first(monkeypatch):
+    sent, order = _push_with(monkeypatch, "claude", "클로드 해설이에요. 표본이 작아요.", "올라마")
+    assert order == ["claude"]
+    assert "클로드 해설이에요" in sent[0]
+
+
+def test_claude_failure_falls_back_to_ollama(monkeypatch):
+    sent, order = _push_with(monkeypatch, "claude", None, "올라마 해설이에요.")
+    assert order == ["claude", "ollama"]
+    assert "올라마 해설이에요" in sent[0]
+
+
+def test_default_backend_never_calls_claude(monkeypatch):
+    monkeypatch.delenv("LLM_BACKEND", raising=False)
+    sent, order = _push_with(monkeypatch, "ollama", "클로드", "올라마 해설이에요.")
+    assert order == ["ollama"]
